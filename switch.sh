@@ -1,21 +1,21 @@
 #!/bin/bash
 set -e
 
-# Detect current pool
-CURRENT_POOL=$(docker exec blue-green-nginx-nginx-1 sh -c 'echo $ACTIVE_POOL')
-if [ "$CURRENT_POOL" == "blue" ]; then
-  NEW_POOL="green"
+CURRENT=$(grep ACTIVE_POOL .env | cut -d'=' -f2)
+if [ "$CURRENT" = "blue" ]; then
+  NEW="green"
 else
-  NEW_POOL="blue"
+  NEW="blue"
 fi
 
-echo "Switching traffic from $CURRENT_POOL ➜ $NEW_POOL"
+echo "Switching traffic from $CURRENT ➜ $NEW"
 
-# Update ACTIVE_POOL environment variable
-docker exec blue-green-nginx-nginx-1 sh -c "export ACTIVE_POOL=$NEW_POOL && envsubst '\$ACTIVE_POOL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf"
+# Update .env file
+sed -i "s/ACTIVE_POOL=.*/ACTIVE_POOL=$NEW/" .env
 
-# Reload nginx
-docker exec blue-green-nginx-nginx-1 nginx -s reload
+echo "Reloading nginx with ACTIVE_POOL=$NEW"
+docker compose up -d --force-recreate --no-deps nginx
 
-# Confirm
-curl -s -I http://localhost:8080/version | grep X-App-Pool || echo "Switch failed"
+echo "Verifying current active pool..."
+sleep 2
+curl -s -i http://localhost:8080/version | grep X-App-Pool
